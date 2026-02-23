@@ -13,7 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Swords className="w-6 h-6 text-primary" />
-          <span className="font-display font-bold text-lg text-primary">VELHA.IO</span>
+          <span className="font-display font-bold text-lg text-primary">VELHA BRASIL</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 bg-muted/50 px-3 py-1 rounded-full">
