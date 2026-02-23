@@ -22,6 +22,21 @@ export default function MatchmakingPage() {
     if (!user || !profile) return;
     setSearching(true);
 
+    // Clean up any stale matches (>15 min)
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: staleMatches } = await supabase
+      .from('matches')
+      .select('id')
+      .eq('status', 'playing')
+      .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+      .lt('created_at', fifteenMinAgo);
+    
+    if (staleMatches && staleMatches.length > 0) {
+      for (const m of staleMatches) {
+        await supabase.from('matches').update({ status: 'finished' }).eq('id', m.id);
+      }
+    }
+
     // Remove any existing entry first, then join queue
     await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
     await supabase.from('matchmaking_queue').insert({

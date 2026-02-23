@@ -49,6 +49,14 @@ export default function GamePage() {
   const myMark = amPlayer1 ? 'X' : 'O';
   const pieceSkin = PIECE_OPTIONS[profile?.selected_piece || 'classic'] || PIECE_OPTIONS.classic;
 
+  // Check if match is stale (>15 min)
+  const isMatchStale = useCallback((matchData: any) => {
+    if (!matchData || matchData.status === 'finished') return false;
+    const created = new Date(matchData.created_at).getTime();
+    const now = Date.now();
+    return now - created > 15 * 60 * 1000;
+  }, []);
+
   // Fetch match and subscribe
   useEffect(() => {
     if (!id) return;
@@ -56,6 +64,15 @@ export default function GamePage() {
     const fetchMatch = async () => {
       const { data } = await supabase.from('matches').select('*').eq('id', id).single();
       if (data) {
+        // Auto-finish stale matches
+        if (isMatchStale(data)) {
+          await supabase.from('matches').update({ status: 'finished' }).eq('id', data.id);
+          setMatch({ ...data, status: 'finished' });
+          setBoard(data.board as string[]);
+          setGameOver(true);
+          setWinner(null);
+          return;
+        }
         setMatch(data);
         setBoard(data.board as string[]);
         if (data.status === 'finished') {
@@ -265,8 +282,8 @@ export default function GamePage() {
       {/* Status */}
       <div className="mb-4 text-center">
         {gameOver ? (
-          <p className={`font-display font-bold text-xl ${winner === user?.id ? 'text-win' : 'text-lose'}`}>
-            {winner === user?.id ? '🏆 VITÓRIA! +30 Troféus' : '💀 DERROTA! -20 Troféus'}
+          <p className={`font-display font-bold text-xl ${!winner ? 'text-muted-foreground' : winner === user?.id ? 'text-win' : 'text-lose'}`}>
+            {!winner ? '⏰ PARTIDA EXPIRADA' : winner === user?.id ? '🏆 VITÓRIA! +30 Troféus' : '💀 DERROTA! -20 Troféus'}
           </p>
         ) : (
           <p className={`font-display font-semibold ${isMyTurn ? 'text-primary' : 'text-muted-foreground'}`}>
