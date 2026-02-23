@@ -22,11 +22,12 @@ export default function MatchmakingPage() {
     if (!user || !profile) return;
     setSearching(true);
 
-    // Join queue
-    await supabase.from('matchmaking_queue').upsert({
+    // Remove any existing entry first, then join queue
+    await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
+    await supabase.from('matchmaking_queue').insert({
       user_id: user.id,
       trophies: profile.trophies,
-    }, { onConflict: 'user_id' });
+    });
 
     // Look for opponent in range
     const findMatch = async () => {
@@ -67,6 +68,8 @@ export default function MatchmakingPage() {
       return false;
     };
 
+    const searchStartedAt = new Date().toISOString();
+
     // Poll for match or check if someone else matched us
     const interval = setInterval(async () => {
       // Check if we were already matched (someone else created a match with us)
@@ -75,6 +78,7 @@ export default function MatchmakingPage() {
         .select('*')
         .eq('status', 'playing')
         .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+        .gte('created_at', searchStartedAt)
         .order('created_at', { ascending: false })
         .limit(1);
 
