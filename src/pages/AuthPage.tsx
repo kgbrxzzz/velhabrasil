@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Trophy, Swords, LogIn, UserPlus, Eye, EyeOff, MailCheck } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Trophy, Swords, LogIn, UserPlus, Eye, EyeOff, MailCheck, RefreshCw } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -13,6 +14,15 @@ const signupSchema = loginSchema.extend({
     .regex(/^[a-zA-Z0-9_]+$/, 'Apenas letras, números e _'),
 });
 
+function translateError(msg: string): string {
+  if (msg.includes('Invalid login credentials')) return 'Email ou senha incorretos. Se você acabou de criar a conta, confirme seu email primeiro.';
+  if (msg.includes('Email not confirmed')) return 'Você precisa confirmar seu email antes de fazer login. Verifique sua caixa de entrada.';
+  if (msg.includes('User already registered')) return 'Este email já está cadastrado. Tente fazer login.';
+  if (msg.includes('over_email_send_rate_limit') || msg.includes('security purposes')) return 'Aguarde alguns segundos antes de tentar novamente.';
+  if (msg.includes('Signup requires a valid password')) return 'A senha precisa ter pelo menos 6 caracteres.';
+  return msg;
+}
+
 export default function AuthPage() {
   const { signIn, signUp } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
@@ -23,6 +33,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,16 +47,29 @@ export default function AuthPage() {
         signupSchema.parse({ email, password, username });
         await signUp(email, password, username);
         setEmailSent(true);
-        return;
       }
     } catch (err: any) {
       if (err instanceof z.ZodError) {
         setError(err.errors[0].message);
       } else {
-        setError(err.message || 'Erro ao autenticar');
+        setError(translateError(err.message || 'Erro ao autenticar'));
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!email) return;
+    setResending(true);
+    setError('');
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email });
+      if (error) throw error;
+    } catch (err: any) {
+      setError(translateError(err.message || 'Erro ao reenviar'));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -74,12 +98,28 @@ export default function AuthPage() {
               <p className="text-muted-foreground">
                 Enviamos um link de confirmação para <strong className="text-foreground">{email}</strong>. Clique no link para ativar sua conta.
               </p>
-              <button
-                onClick={() => { setEmailSent(false); setIsLogin(true); }}
-                className="mt-4 px-6 py-2 rounded-lg bg-primary text-primary-foreground font-display font-semibold hover:opacity-90 transition-all"
-              >
-                VOLTAR AO LOGIN
-              </button>
+              <p className="text-muted-foreground text-sm">
+                Não recebeu? Verifique a pasta de spam.
+              </p>
+              {error && (
+                <p className="text-destructive text-sm font-semibold">{error}</p>
+              )}
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  onClick={handleResendEmail}
+                  disabled={resending}
+                  className="px-6 py-2 rounded-lg bg-muted text-muted-foreground font-display font-semibold hover:text-foreground transition-all disabled:opacity-50 flex items-center justify-center gap-2 mx-auto"
+                >
+                  <RefreshCw className={`w-4 h-4 ${resending ? 'animate-spin' : ''}`} />
+                  {resending ? 'REENVIANDO...' : 'REENVIAR EMAIL'}
+                </button>
+                <button
+                  onClick={() => { setEmailSent(false); setIsLogin(true); setError(''); }}
+                  className="px-6 py-2 rounded-lg bg-primary text-primary-foreground font-display font-semibold hover:opacity-90 transition-all"
+                >
+                  VOLTAR AO LOGIN
+                </button>
+              </div>
             </div>
           ) : (
           <>
