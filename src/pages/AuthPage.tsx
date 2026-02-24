@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Trophy, Swords, LogIn, UserPlus } from 'lucide-react';
+import { Trophy, Swords, LogIn, UserPlus, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -21,6 +21,8 @@ export default function AuthPage() {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +35,8 @@ export default function AuthPage() {
       } else {
         signupSchema.parse({ email, password, username });
         await signUp(email, password, username);
+        setEmailSent(true);
+        return;
       }
     } catch (err: any) {
       if (err instanceof z.ZodError) {
@@ -63,6 +67,22 @@ export default function AuthPage() {
 
         {/* Card */}
         <div className="card-game rounded-xl p-8">
+          {emailSent ? (
+            <div className="text-center py-8 space-y-4">
+              <MailCheck className="w-16 h-16 text-primary mx-auto" />
+              <h2 className="font-display font-bold text-xl text-foreground">VERIFIQUE SEU EMAIL</h2>
+              <p className="text-muted-foreground">
+                Enviamos um link de confirmação para <strong className="text-foreground">{email}</strong>. Clique no link para ativar sua conta.
+              </p>
+              <button
+                onClick={() => { setEmailSent(false); setIsLogin(true); }}
+                className="mt-4 px-6 py-2 rounded-lg bg-primary text-primary-foreground font-display font-semibold hover:opacity-90 transition-all"
+              >
+                VOLTAR AO LOGIN
+              </button>
+            </div>
+          ) : (
+          <>
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
             <button
@@ -122,14 +142,23 @@ export default function AuthPage() {
               <label className="block text-sm font-semibold text-muted-foreground mb-1">
                 Senha
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                placeholder="••••••"
-                maxLength={100}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all pr-12"
+                  placeholder="••••••"
+                  maxLength={100}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -149,6 +178,8 @@ export default function AuthPage() {
             <Trophy className="w-4 h-4 text-trophy" />
             <span>Conquiste troféus e suba no ranking!</span>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
