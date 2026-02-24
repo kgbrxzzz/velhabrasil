@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Swords, Trophy, X } from 'lucide-react';
+import Leaderboard from '@/components/Leaderboard';
 
 export default function MatchmakingPage() {
   const { user, profile } = useAuth();
@@ -122,8 +123,8 @@ export default function MatchmakingPage() {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center p-4">
-      <div className="text-center animate-slide-up">
+    <div className="flex-1 flex flex-col items-center justify-start p-4 gap-6 overflow-y-auto">
+      <div className="text-center animate-slide-up w-full max-w-md">
         {!searching ? (
           <>
             <div className="mb-8">
@@ -167,6 +168,11 @@ export default function MatchmakingPage() {
             </button>
           </>
         )}
+      </div>
+
+      {/* Leaderboard */}
+      <div className="w-full max-w-md animate-slide-up" style={{ animationDelay: '0.1s' }}>
+        <Leaderboard />
       </div>
     </div>
   );
