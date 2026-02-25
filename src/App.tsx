@@ -9,6 +9,7 @@ import AuthPage from "./pages/AuthPage";
 import GamePage from "./pages/GamePage";
 import SettingsPage from "./pages/SettingsPage";
 import RankingPage from "./pages/RankingPage";
+import ProfilePage from "./pages/ProfilePage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,11 @@ const AppRoutes = () => (
     <Route path="/settings" element={
       <ProtectedRoute>
         <AppLayout><SettingsPage /></AppLayout>
+      </ProtectedRoute>
+    } />
+    <Route path="/profile/:userId?" element={
+      <ProtectedRoute>
+        <AppLayout><ProfilePage /></AppLayout>
       </ProtectedRoute>
     } />
     <Route path="*" element={<NotFound />} />
