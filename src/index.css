@@ -126,7 +126,15 @@
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
+@keyframes emoji-float {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  15% { transform: translateY(-30px) scale(1.2); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateY(-220px) scale(0.8); opacity: 0; }
+}
+
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 .animate-timer-pulse { animation: timer-pulse 1s ease-in-out infinite; }
 .animate-slide-up { animation: slide-up 0.4s ease-out; }
 .animate-piece-place { animation: piece-place 0.4s ease-out; }
+.animate-emoji-float { animation: emoji-float 2.5s ease-out forwards; }
