@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
 import GamePage from "./pages/GamePage";
 import SettingsPage from "./pages/SettingsPage";
+import RankingPage from "./pages/RankingPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -38,6 +39,11 @@ const AppRoutes = () => (
     <Route path="/game/:id" element={
       <ProtectedRoute>
         <AppLayout><GamePage /></AppLayout>
+      </ProtectedRoute>
+    } />
+    <Route path="/ranking" element={
+      <ProtectedRoute>
+        <AppLayout><RankingPage /></AppLayout>
       </ProtectedRoute>
     } />
     <Route path="/settings" element={
