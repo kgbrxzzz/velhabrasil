@@ -1,6 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Swords, Trophy, Settings, LogOut, Home } from 'lucide-react';
+import { Swords, Trophy, Settings, LogOut, Home, Medal } from 'lucide-react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile, signOut } = useAuth();
@@ -36,6 +36,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <NavLink to="/" className={({ isActive }) => `flex flex-col items-center gap-1 py-1 px-3 rounded-lg transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
             <Home className="w-5 h-5" />
             <span className="text-xs font-display font-semibold">INÍCIO</span>
+          </NavLink>
+          <NavLink to="/ranking" className={({ isActive }) => `flex flex-col items-center gap-1 py-1 px-3 rounded-lg transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Medal className="w-5 h-5" />
+            <span className="text-xs font-display font-semibold">RANKING</span>
           </NavLink>
           <NavLink to="/settings" className={({ isActive }) => `flex flex-col items-center gap-1 py-1 px-3 rounded-lg transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
             <Settings className="w-5 h-5" />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Settings, Trophy, Gamepad2, ChevronRight, Check } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Settings, Trophy, Gamepad2, Check, UserPen } from 'lucide-react';
 
 const PIECE_OPTIONS = [
   { id: 'classic', name: 'Clássico', x: '✕', o: '◯' },
@@ -15,15 +16,71 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const [newUsername, setNewUsername] = useState(profile?.username || '');
+  const [usernameError, setUsernameError] = useState('');
+  const [usernameSaving, setUsernameSaving] = useState(false);
+  const [usernameSaved, setUsernameSaved] = useState(false);
+
   const handleSave = async () => {
     if (!profile) return;
     setSaving(true);
-    const { supabase } = await import('@/integrations/supabase/client');
     await supabase.from('profiles').update({ selected_piece: selectedPiece }).eq('user_id', profile.user_id);
     await refreshProfile();
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleUsernameChange = async () => {
+    if (!profile) return;
+    const trimmed = newUsername.trim();
+    
+    if (trimmed.length < 3) {
+      setUsernameError('Mínimo 3 caracteres');
+      return;
+    }
+    if (trimmed.length > 20) {
+      setUsernameError('Máximo 20 caracteres');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      setUsernameError('Apenas letras, números e _');
+      return;
+    }
+    if (trimmed === profile.username) return;
+
+    setUsernameError('');
+    setUsernameSaving(true);
+
+    // Check uniqueness
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', trimmed)
+      .neq('user_id', profile.user_id)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      setUsernameError('Este nome já está em uso');
+      setUsernameSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ username: trimmed })
+      .eq('user_id', profile.user_id);
+
+    if (error) {
+      setUsernameError(error.message.includes('unique') ? 'Este nome já está em uso' : 'Erro ao salvar');
+      setUsernameSaving(false);
+      return;
+    }
+
+    await refreshProfile();
+    setUsernameSaving(false);
+    setUsernameSaved(true);
+    setTimeout(() => setUsernameSaved(false), 2000);
   };
 
   return (
@@ -52,6 +109,34 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">Derrotas</p>
             </div>
           </div>
+        </div>
+
+        {/* Username change */}
+        <div className="card-game rounded-xl p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <UserPen className="w-5 h-5 text-primary" />
+            <h2 className="font-display font-bold text-sm text-muted-foreground">TROCAR NOME</h2>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newUsername}
+              onChange={(e) => { setNewUsername(e.target.value); setUsernameError(''); }}
+              maxLength={20}
+              className="flex-1 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="Novo nome"
+            />
+            <button
+              onClick={handleUsernameChange}
+              disabled={usernameSaving || newUsername.trim() === profile?.username}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50"
+            >
+              {usernameSaved ? <Check className="w-4 h-4" /> : usernameSaving ? '...' : 'SALVAR'}
+            </button>
+          </div>
+          {usernameError && (
+            <p className="text-destructive text-xs mt-2 font-semibold">{usernameError}</p>
+          )}
         </div>
 
         {/* Piece selection */}
@@ -89,7 +174,7 @@ export default function SettingsPage() {
         >
           {saved ? (
             <><Check className="w-4 h-4 inline mr-2" />SALVO!</>
-          ) : saving ? 'SALVANDO...' : 'SALVAR'}
+          ) : saving ? 'SALVANDO...' : 'SALVAR PEÇA'}
         </button>
       </div>
     </div>

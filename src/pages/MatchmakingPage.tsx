@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Swords, Trophy, X } from 'lucide-react';
-import Leaderboard from '@/components/Leaderboard';
+
 
 export default function MatchmakingPage() {
   const { user, profile } = useAuth();
@@ -170,10 +170,6 @@ export default function MatchmakingPage() {
         )}
       </div>
 
-      {/* Leaderboard */}
-      <div className="w-full max-w-md animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        <Leaderboard />
-      </div>
     </div>
   );
 }
