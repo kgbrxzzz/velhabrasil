@@ -1,6 +1,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Swords, Trophy, Settings, LogOut, Home, Medal } from 'lucide-react';
+import { Swords, Trophy, Settings, LogOut, Home, Medal, User } from 'lucide-react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile, signOut } = useAuth();
@@ -20,7 +20,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Trophy className="w-4 h-4 text-trophy" />
             <span className="font-display font-bold text-sm text-trophy">{profile?.trophies ?? 0}</span>
           </div>
-          <span className="text-sm text-muted-foreground font-semibold">{profile?.username}</span>
+          <NavLink to="/profile" className="text-sm text-muted-foreground font-semibold hover:text-foreground transition-colors">{profile?.username}</NavLink>
           <button onClick={signOut} className="text-muted-foreground hover:text-destructive transition-colors" title="Sair">
             <LogOut className="w-5 h-5" />
           </button>

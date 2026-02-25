@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Trophy, Medal, Crown, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +16,7 @@ interface LeaderboardEntry {
 
 export default function Leaderboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [players, setPlayers] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -79,7 +81,8 @@ export default function Leaderboard() {
           return (
             <div
               key={p.id}
-              className={`flex items-center gap-3 px-5 py-3 transition-colors ${
+              onClick={() => navigate(`/profile/${p.user_id}`)}
+              className={`flex items-center gap-3 px-5 py-3 transition-colors cursor-pointer ${
                 isMe ? 'bg-primary/10' : 'hover:bg-muted/30'
               }`}
             >
