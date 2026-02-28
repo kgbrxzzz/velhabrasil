@@ -10,7 +10,9 @@ import GamePage from "./pages/GamePage";
 import SettingsPage from "./pages/SettingsPage";
 import RankingPage from "./pages/RankingPage";
 import ProfilePage from "./pages/ProfilePage";
+import FriendsPage from "./pages/FriendsPage";
 import AppLayout from "./components/AppLayout";
+import FriendInviteListener from "./components/FriendInviteListener";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +59,11 @@ const AppRoutes = () => (
         <AppLayout><ProfilePage /></AppLayout>
       </ProtectedRoute>
     } />
+    <Route path="/friends" element={
+      <ProtectedRoute>
+        <AppLayout><FriendsPage /></AppLayout>
+      </ProtectedRoute>
+    } />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
@@ -68,6 +75,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <FriendInviteListener />
           <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
