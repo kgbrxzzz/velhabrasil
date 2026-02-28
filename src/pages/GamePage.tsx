@@ -34,6 +34,8 @@ function isDraw(board: string[]): boolean {
 
 export default function GamePage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = new URLSearchParams(window.location.search);
+  const isFriendly = searchParams.get('friendly') === 'true';
   const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [match, setMatch] = useState<any>(null);
@@ -160,7 +162,9 @@ export default function GamePage() {
       winner_id: winnerId,
     }).eq('id', match.id);
 
-    await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
+    if (!isFriendly) {
+      await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
+    }
   }, [match, user, amPlayer1]);
 
   const makeMove = async (index: number) => {
@@ -183,7 +187,9 @@ export default function GamePage() {
         winner_id: winnerId,
       }).eq('id', match.id);
 
-      await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
+      if (!isFriendly) {
+        await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
+      }
       await refreshProfile();
     } else if (draw) {
       // Reset board for new round
@@ -284,7 +290,10 @@ export default function GamePage() {
       <div className="mb-4 text-center">
         {gameOver ? (
           <p className={`font-display font-bold text-xl ${!winner ? 'text-muted-foreground' : winner === user?.id ? 'text-win' : 'text-lose'}`}>
-            {!winner ? '⏰ PARTIDA EXPIRADA' : winner === user?.id ? '🏆 VITÓRIA! +30 Troféus' : '💀 DERROTA! -20 Troféus'}
+            {isFriendly 
+              ? (!winner ? '⏰ PARTIDA EXPIRADA' : winner === user?.id ? '🏆 VITÓRIA! (Amistoso)' : '💀 DERROTA (Amistoso)')
+              : (!winner ? '⏰ PARTIDA EXPIRADA' : winner === user?.id ? '🏆 VITÓRIA! +30 Troféus' : '💀 DERROTA! -20 Troféus')
+            }
           </p>
         ) : (
           <p className={`font-display font-semibold ${isMyTurn ? 'text-primary' : 'text-muted-foreground'}`}>
