@@ -13,6 +13,7 @@ import ProfilePage from "./pages/ProfilePage";
 import FriendsPage from "./pages/FriendsPage";
 import AppLayout from "./components/AppLayout";
 import FriendInviteListener from "./components/FriendInviteListener";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
+    <Route path="/reset-password" element={<ResetPasswordPage />} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/game/:id" element={
       <ProtectedRoute>
