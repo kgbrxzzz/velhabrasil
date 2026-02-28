@@ -96,7 +96,7 @@ export default function AuthPage() {
               <MailCheck className="w-16 h-16 text-primary mx-auto" />
               <h2 className="font-display font-bold text-xl text-foreground">VERIFIQUE SEU EMAIL</h2>
               <p className="text-muted-foreground">
-                Enviamos um link de confirmação para <strong className="text-foreground">{email}</strong>. Clique no link para ativar sua conta.
+                Enviamos um link para <strong className="text-foreground">{email}</strong>. Verifique sua caixa de entrada e clique no link.
               </p>
               <p className="text-muted-foreground text-sm">
                 Não recebeu? Verifique a pasta de spam.
@@ -212,6 +212,29 @@ export default function AuthPage() {
             >
               {loading ? 'CARREGANDO...' : isLogin ? 'ENTRAR' : 'CRIAR CONTA'}
             </button>
+
+            {isLogin && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!email) { setError('Digite seu email primeiro.'); return; }
+                  setError(''); setLoading(true);
+                  try {
+                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                      redirectTo: `${window.location.origin}/reset-password`,
+                    });
+                    if (error) throw error;
+                    setError('');
+                    setEmailSent(true);
+                  } catch (err: any) {
+                    setError(translateError(err.message || 'Erro ao enviar email'));
+                  } finally { setLoading(false); }
+                }}
+                className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                Esqueci minha senha
+              </button>
+            )}
           </form>
 
           <div className="mt-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
