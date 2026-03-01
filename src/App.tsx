@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
 import GamePage from "./pages/GamePage";
+import GamePage2v2 from "./pages/GamePage2v2";
 import SettingsPage from "./pages/SettingsPage";
 import RankingPage from "./pages/RankingPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -44,6 +45,11 @@ const AppRoutes = () => (
     <Route path="/game/:id" element={
       <ProtectedRoute>
         <AppLayout><GamePage /></AppLayout>
+      </ProtectedRoute>
+    } />
+    <Route path="/game2v2/:id" element={
+      <ProtectedRoute>
+        <AppLayout><GamePage2v2 /></AppLayout>
       </ProtectedRoute>
     } />
     <Route path="/ranking" element={

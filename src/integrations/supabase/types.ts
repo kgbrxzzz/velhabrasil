@@ -46,11 +46,15 @@ export type Database = {
           board: Json
           created_at: string
           current_turn: string | null
+          game_mode: string
           id: string
           player1_id: string
           player2_id: string | null
+          player3_id: string | null
+          player4_id: string | null
           round: number
           status: string
+          turn_order: Json | null
           turn_started_at: string | null
           updated_at: string
           winner_id: string | null
@@ -59,11 +63,15 @@ export type Database = {
           board?: Json
           created_at?: string
           current_turn?: string | null
+          game_mode?: string
           id?: string
           player1_id: string
           player2_id?: string | null
+          player3_id?: string | null
+          player4_id?: string | null
           round?: number
           status?: string
+          turn_order?: Json | null
           turn_started_at?: string | null
           updated_at?: string
           winner_id?: string | null
@@ -72,11 +80,15 @@ export type Database = {
           board?: Json
           created_at?: string
           current_turn?: string | null
+          game_mode?: string
           id?: string
           player1_id?: string
           player2_id?: string | null
+          player3_id?: string | null
+          player4_id?: string | null
           round?: number
           status?: string
+          turn_order?: Json | null
           turn_started_at?: string | null
           updated_at?: string
           winner_id?: string | null
@@ -86,19 +98,25 @@ export type Database = {
       matchmaking_queue: {
         Row: {
           created_at: string
+          game_mode: string
           id: string
+          party_id: string | null
           trophies: number
           user_id: string
         }
         Insert: {
           created_at?: string
+          game_mode?: string
           id?: string
+          party_id?: string | null
           trophies?: number
           user_id: string
         }
         Update: {
           created_at?: string
+          game_mode?: string
           id?: string
+          party_id?: string | null
           trophies?: number
           user_id?: string
         }

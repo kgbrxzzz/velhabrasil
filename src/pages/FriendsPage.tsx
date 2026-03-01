@@ -166,32 +166,47 @@ export default function FriendsPage() {
     fetchFriends();
   };
 
-  const inviteToMatch = async (friendId: string) => {
+  const inviteToMatch = async (friendId: string, mode: '1v1' | '2v2' = '1v1') => {
     if (!user) return;
-    // Create a friendly match (no trophies)
-    const { data: match, error } = await supabase.from('matches').insert({
-      player1_id: user.id,
-      player2_id: friendId,
-      status: 'playing',
-      current_turn: user.id,
-      turn_started_at: new Date().toISOString(),
-      board: Array(9).fill(''),
-    }).select().single();
 
-    if (error || !match) {
-      toast.error('Erro ao criar partida');
-      return;
+    if (mode === '1v1') {
+      const { data: match, error } = await supabase.from('matches').insert({
+        player1_id: user.id,
+        player2_id: friendId,
+        status: 'playing',
+        current_turn: user.id,
+        turn_started_at: new Date().toISOString(),
+        board: Array(9).fill(''),
+        game_mode: '1v1',
+      }).select().single();
+
+      if (error || !match) { toast.error('Erro ao criar partida'); return; }
+
+      await supabase.channel(`friend-invite-${friendId}`).send({
+        type: 'broadcast', event: 'match-invite',
+        payload: { matchId: match.id, fromId: user.id, mode: '1v1' },
+      });
+      toast.success('Convite enviado!');
+      navigate(`/game/${match.id}?friendly=true`);
+    } else {
+      // 2v2 invite - create a waiting match, need 2 more players
+      const { data: match, error } = await supabase.from('matches').insert({
+        player1_id: user.id,
+        player2_id: friendId, // friend on same team? No - friend joins red team for balance
+        status: 'waiting',
+        game_mode: '2v2',
+        board: Array(25).fill(''),
+        turn_order: [],
+      }).select().single();
+
+      if (error || !match) { toast.error('Erro ao criar partida'); return; }
+
+      await supabase.channel(`friend-invite-${friendId}`).send({
+        type: 'broadcast', event: 'match-invite',
+        payload: { matchId: match.id, fromId: user.id, mode: '2v2' },
+      });
+      toast.success('Convite 2v2 enviado! Aguardando mais jogadores...');
     }
-
-    // Notify friend via broadcast
-    await supabase.channel(`friend-invite-${friendId}`).send({
-      type: 'broadcast',
-      event: 'match-invite',
-      payload: { matchId: match.id, fromUsername: '', fromId: user.id },
-    });
-
-    toast.success('Convite enviado! Entrando na partida...');
-    navigate(`/game/${match.id}?friendly=true`);
   };
 
   const alreadyFriend = (userId: string) => friends.some(f => f.friendId === userId);
@@ -341,14 +356,24 @@ export default function FriendsPage() {
                 </button>
                 <div className="flex gap-2">
                   {f.isOnline && (
-                    <button
-                      onClick={() => inviteToMatch(f.friendId)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-display text-[10px] font-bold"
-                      title="Convidar para x1 amistoso"
-                    >
-                      <Swords className="w-4 h-4" />
-                      X1
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => inviteToMatch(f.friendId, '1v1')}
+                        className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-display text-[10px] font-bold"
+                        title="X1 amistoso 1v1"
+                      >
+                        <Swords className="w-3.5 h-3.5" />
+                        1v1
+                      </button>
+                      <button
+                        onClick={() => inviteToMatch(f.friendId, '2v2')}
+                        className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors font-display text-[10px] font-bold"
+                        title="Convidar para 2v2"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        2v2
+                      </button>
+                    </div>
                   )}
                   <button
                     onClick={() => removeFriend(f.friendshipId)}

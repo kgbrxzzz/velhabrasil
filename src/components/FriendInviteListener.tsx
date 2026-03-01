@@ -14,12 +14,13 @@ export default function FriendInviteListener() {
     const channel = supabase
       .channel(`friend-invite-${user.id}`)
       .on('broadcast', { event: 'match-invite' }, (payload) => {
-        const { matchId, fromId } = payload.payload;
-        toast('⚔️ Convite para X1 amistoso!', {
+        const { matchId, mode } = payload.payload;
+        const is2v2 = mode === '2v2';
+        toast(is2v2 ? '👥 Convite para 2v2!' : '⚔️ Convite para X1 amistoso!', {
           duration: 15000,
           action: {
             label: 'ACEITAR',
-            onClick: () => navigate(`/game/${matchId}?friendly=true`),
+            onClick: () => navigate(is2v2 ? `/game2v2/${matchId}` : `/game/${matchId}?friendly=true`),
           },
         });
       })
