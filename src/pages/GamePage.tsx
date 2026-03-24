@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,18 +46,20 @@ export default function GamePage() {
   const [opponentProfile, setOpponentProfile] = useState<any>(null);
   const [winningCombo, setWinningCombo] = useState<number[] | null>(null);
   const [lastPlaced, setLastPlaced] = useState<number | null>(null);
+  const timeUpHandled = useRef(false);
+
+  const matchRef = useRef(match);
+  matchRef.current = match;
 
   const isMyTurn = match?.current_turn === user?.id;
   const amPlayer1 = match?.player1_id === user?.id;
   const myMark = amPlayer1 ? 'X' : 'O';
   const pieceSkin = PIECE_OPTIONS[profile?.selected_piece || 'classic'] || PIECE_OPTIONS.classic;
 
-  // Check if match is stale (>15 min)
   const isMatchStale = useCallback((matchData: any) => {
     if (!matchData || matchData.status === 'finished') return false;
     const created = new Date(matchData.created_at).getTime();
-    const now = Date.now();
-    return now - created > 15 * 60 * 1000;
+    return Date.now() - created > 15 * 60 * 1000;
   }, []);
 
   // Fetch match and subscribe
@@ -67,7 +69,6 @@ export default function GamePage() {
     const fetchMatch = async () => {
       const { data } = await supabase.from('matches').select('*').eq('id', id).single();
       if (data) {
-        // Auto-finish stale matches
         if (isMatchStale(data)) {
           await supabase.from('matches').update({ status: 'finished' }).eq('id', data.id);
           setMatch({ ...data, status: 'finished' });
@@ -94,6 +95,7 @@ export default function GamePage() {
         setMatch(newMatch);
         setBoard(newMatch.board as string[]);
         setTimeLeft(10);
+        timeUpHandled.current = false;
         if (newMatch.status === 'finished') {
           setGameOver(true);
           setWinner(newMatch.winner_id);
@@ -102,7 +104,7 @@ export default function GamePage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [id]);
+  }, [id, isMatchStale]);
 
   // Fetch opponent profile
   useEffect(() => {
@@ -113,7 +115,7 @@ export default function GamePage() {
         if (data) setOpponentProfile(data);
       });
     }
-  }, [match, user, amPlayer1]);
+  }, [match?.player1_id, match?.player2_id, user?.id, amPlayer1]);
 
   // Check for winning combo
   useEffect(() => {
@@ -127,15 +129,34 @@ export default function GamePage() {
     setWinningCombo(null);
   }, [board]);
 
+  // Handle time up using ref to avoid stale closures
+  const handleTimeUp = useCallback(async () => {
+    const currentMatch = matchRef.current;
+    if (!currentMatch || !user || timeUpHandled.current) return;
+    timeUpHandled.current = true;
+
+    const loserId = user.id;
+    const isP1 = currentMatch.player1_id === user.id;
+    const winnerId = isP1 ? currentMatch.player2_id : currentMatch.player1_id;
+
+    await supabase.from('matches').update({
+      status: 'finished',
+      winner_id: winnerId,
+    }).eq('id', currentMatch.id);
+
+    if (!isFriendly) {
+      await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
+    }
+  }, [user, isFriendly]);
+
   // Timer
   useEffect(() => {
     if (gameOver || !match || match.status !== 'playing') return;
-    
+
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // Time's up - other player wins
-          if (isMyTurn) {
+          if (matchRef.current?.current_turn === user?.id) {
             handleTimeUp();
           }
           return 0;
@@ -145,27 +166,13 @@ export default function GamePage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [match, gameOver, isMyTurn]);
+  }, [match?.id, match?.status, gameOver, user?.id, handleTimeUp]);
 
   // Reset timer on turn change
   useEffect(() => {
     setTimeLeft(10);
+    timeUpHandled.current = false;
   }, [match?.current_turn]);
-
-  const handleTimeUp = useCallback(async () => {
-    if (!match || !user) return;
-    const loserId = user.id;
-    const winnerId = amPlayer1 ? match.player2_id : match.player1_id;
-    
-    await supabase.from('matches').update({
-      status: 'finished',
-      winner_id: winnerId,
-    }).eq('id', match.id);
-
-    if (!isFriendly) {
-      await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
-    }
-  }, [match, user, amPlayer1]);
 
   const makeMove = async (index: number) => {
     if (!isMyTurn || board[index] || gameOver || !match) return;
@@ -180,7 +187,7 @@ export default function GamePage() {
     if (win) {
       const winnerId = user!.id;
       const loserId = amPlayer1 ? match.player2_id : match.player1_id;
-      
+
       await supabase.from('matches').update({
         board: newBoard,
         status: 'finished',
@@ -192,7 +199,6 @@ export default function GamePage() {
       }
       await refreshProfile();
     } else if (draw) {
-      // Reset board for new round
       await supabase.from('matches').update({
         board: Array(9).fill(''),
         round: match.round + 1,
@@ -224,8 +230,8 @@ export default function GamePage() {
         className={`
           aspect-square rounded-lg text-4xl sm:text-5xl font-bold transition-all duration-200
           flex items-center justify-center
-          ${!value && isMyTurn && !gameOver 
-            ? 'bg-muted/50 hover:bg-muted cursor-pointer hover:scale-105' 
+          ${!value && isMyTurn && !gameOver
+            ? 'bg-muted/50 hover:bg-muted cursor-pointer hover:scale-105'
             : 'bg-muted/30 cursor-default'}
           ${isWinning ? 'bg-win/20 ring-2 ring-win' : ''}
           ${value === 'X' ? 'text-primary' : 'text-secondary'}
@@ -252,7 +258,6 @@ export default function GamePage() {
     <div className="flex-1 flex flex-col items-center justify-center p-4 max-w-lg mx-auto w-full">
       {/* Players bar */}
       <div className="w-full flex items-center justify-between mb-6 animate-slide-up">
-        {/* Me */}
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${isMyTurn && !gameOver ? 'bg-primary/10 ring-1 ring-primary' : 'bg-muted/30'}`}>
           <div className="text-right">
             <p className="font-display font-bold text-sm truncate max-w-[80px]">{profile?.username ?? '...'}</p>
@@ -264,7 +269,6 @@ export default function GamePage() {
           <span className="text-2xl">{amPlayer1 ? pieceSkin.x : pieceSkin.o}</span>
         </div>
 
-        {/* Timer */}
         <div className={`flex flex-col items-center ${timeLeft <= 3 ? 'animate-timer-pulse' : ''}`}>
           <Clock className={`w-5 h-5 ${timeLeft <= 3 ? 'text-timer-danger' : 'text-muted-foreground'}`} />
           <span className={`font-display font-bold text-2xl ${timeLeft <= 3 ? 'text-timer-danger' : 'text-foreground'}`}>
@@ -273,7 +277,6 @@ export default function GamePage() {
           <span className="text-xs text-muted-foreground">Rodada {match.round}</span>
         </div>
 
-        {/* Opponent */}
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${!isMyTurn && !gameOver ? 'bg-secondary/10 ring-1 ring-secondary' : 'bg-muted/30'}`}>
           <span className="text-2xl">{amPlayer1 ? pieceSkin.o : pieceSkin.x}</span>
           <div>
@@ -290,7 +293,7 @@ export default function GamePage() {
       <div className="mb-4 text-center">
         {gameOver ? (
           <p className={`font-display font-bold text-xl ${!winner ? 'text-muted-foreground' : winner === user?.id ? 'text-win' : 'text-lose'}`}>
-            {isFriendly 
+            {isFriendly
               ? (!winner ? '⏰ PARTIDA EXPIRADA' : winner === user?.id ? '🏆 VITÓRIA! (Amistoso)' : '💀 DERROTA (Amistoso)')
               : (!winner ? '⏰ PARTIDA EXPIRADA' : winner === user?.id ? '🏆 VITÓRIA! +30 Troféus' : '💀 DERROTA! -20 Troféus')
             }

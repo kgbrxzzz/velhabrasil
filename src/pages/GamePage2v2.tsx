@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -66,20 +66,23 @@ export default function GamePage2v2() {
   const [winningCombo, setWinningCombo] = useState<number[] | null>(null);
   const [lastPlaced, setLastPlaced] = useState<number | null>(null);
   const [players, setPlayers] = useState<Record<string, any>>({});
+  const timeUpHandled = useRef(false);
+  const matchRef = useRef(match);
+  matchRef.current = match;
 
   const turnOrder: string[] = match?.turn_order ?? [];
   const isMyTurn = match?.current_turn === user?.id;
 
-  // Which team am I on?
+  const getTeam = useCallback((playerId: string) => {
+    const m = matchRef.current;
+    if (!m) return null;
+    if (playerId === m.player1_id || playerId === m.player3_id) return 'blue';
+    return 'red';
+  }, []);
+
   const myTeam = match ? (
     match.player1_id === user?.id || match.player3_id === user?.id ? 'blue' : 'red'
   ) : null;
-
-  const getTeam = (playerId: string) => {
-    if (!match) return null;
-    if (playerId === match.player1_id || playerId === match.player3_id) return 'blue';
-    return 'red';
-  };
 
   const getMyMark = () => myTeam === 'blue' ? 'X' : 'O';
 
@@ -106,6 +109,7 @@ export default function GamePage2v2() {
         setMatch(newMatch);
         setBoard(newMatch.board as string[]);
         setTimeLeft(15);
+        timeUpHandled.current = false;
         if (newMatch.status === 'finished') {
           setGameOver(true);
           setWinner(newMatch.winner_id);
@@ -128,12 +132,28 @@ export default function GamePage2v2() {
         setPlayers(map);
       }
     });
-  }, [match]);
+  }, [match?.player1_id, match?.player2_id, match?.player3_id, match?.player4_id]);
 
   // Check winning combo
   useEffect(() => {
     setWinningCombo(getWinningCombo5x5(board));
   }, [board]);
+
+  // Handle time up
+  const handleTimeUp = useCallback(async () => {
+    const currentMatch = matchRef.current;
+    if (!currentMatch || !user || timeUpHandled.current) return;
+    timeUpHandled.current = true;
+
+    const losingTeam = getTeam(user.id);
+    const winnerTeam = losingTeam === 'blue' ? 'red' : 'blue';
+    const winnerId = winnerTeam === 'blue' ? currentMatch.player1_id : currentMatch.player2_id;
+
+    await supabase.from('matches').update({
+      status: 'finished',
+      winner_id: winnerId,
+    }).eq('id', currentMatch.id);
+  }, [user, getTeam]);
 
   // Timer
   useEffect(() => {
@@ -141,30 +161,21 @@ export default function GamePage2v2() {
     const interval = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          if (isMyTurn) handleTimeUp();
+          if (matchRef.current?.current_turn === user?.id) {
+            handleTimeUp();
+          }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [match, gameOver, isMyTurn]);
+  }, [match?.id, match?.status, gameOver, user?.id, handleTimeUp]);
 
-  useEffect(() => { setTimeLeft(15); }, [match?.current_turn]);
-
-  const handleTimeUp = useCallback(async () => {
-    if (!match || !user) return;
-    // The team that timed out loses, the other team "wins" (store winner as a team marker)
-    const losingTeam = getTeam(user.id);
-    const winnerTeam = losingTeam === 'blue' ? 'red' : 'blue';
-    // Pick first player of winning team as winner_id for display
-    const winnerId = winnerTeam === 'blue' ? match.player1_id : match.player2_id;
-
-    await supabase.from('matches').update({
-      status: 'finished',
-      winner_id: winnerId,
-    }).eq('id', match.id);
-  }, [match, user]);
+  useEffect(() => {
+    setTimeLeft(15);
+    timeUpHandled.current = false;
+  }, [match?.current_turn]);
 
   const makeMove = async (index: number) => {
     if (!isMyTurn || board[index] || gameOver || !match) return;
@@ -193,7 +204,6 @@ export default function GamePage2v2() {
         turn_started_at: new Date().toISOString(),
       }).eq('id', match.id);
     } else {
-      // Next turn
       const currentIdx = turnOrder.indexOf(user!.id);
       const nextIdx = (currentIdx + 1) % turnOrder.length;
       await supabase.from('matches').update({
@@ -231,7 +241,6 @@ export default function GamePage2v2() {
     );
   }
 
-  // Waiting for players
   const allPlayers = [match.player1_id, match.player2_id, match.player3_id, match.player4_id].filter(Boolean);
   if (allPlayers.length < 4 && match.status !== 'playing' && match.status !== 'finished') {
     return (
@@ -252,7 +261,6 @@ export default function GamePage2v2() {
     <div className="flex-1 flex flex-col items-center justify-start p-4 max-w-lg mx-auto w-full overflow-y-auto">
       {/* Teams header */}
       <div className="w-full flex items-stretch justify-between mb-4 gap-2 animate-slide-up">
-        {/* Blue Team */}
         <div className={`flex-1 rounded-lg p-2 border ${myTeam === 'blue' ? 'border-secondary ring-1 ring-secondary' : 'border-border'} bg-secondary/5`}>
           <p className="font-display text-[10px] font-bold text-secondary text-center mb-1">🔵 EQUIPE AZUL</p>
           {blueTeam.map(pid => (
@@ -267,7 +275,6 @@ export default function GamePage2v2() {
           ))}
         </div>
 
-        {/* Timer */}
         <div className={`flex flex-col items-center justify-center px-3 ${timeLeft <= 3 ? 'animate-timer-pulse' : ''}`}>
           <Clock className={`w-5 h-5 ${timeLeft <= 3 ? 'text-timer-danger' : 'text-muted-foreground'}`} />
           <span className={`font-display font-bold text-2xl ${timeLeft <= 3 ? 'text-timer-danger' : 'text-foreground'}`}>
@@ -276,7 +283,6 @@ export default function GamePage2v2() {
           <span className="text-[10px] text-muted-foreground font-display">R{match.round}</span>
         </div>
 
-        {/* Red Team */}
         <div className={`flex-1 rounded-lg p-2 border ${myTeam === 'red' ? 'border-destructive ring-1 ring-destructive' : 'border-border'} bg-destructive/5`}>
           <p className="font-display text-[10px] font-bold text-destructive text-center mb-1">🔴 EQUIPE VERMELHA</p>
           {redTeam.map(pid => (
