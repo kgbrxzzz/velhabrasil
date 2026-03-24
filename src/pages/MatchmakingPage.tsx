@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,16 @@ export default function MatchmakingPage() {
   const [searching, setSearching] = useState(false);
   const [dots, setDots] = useState('');
   const [gameMode, setGameMode] = useState<GameMode>('1v1');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!searching) return;
@@ -21,27 +31,35 @@ export default function MatchmakingPage() {
     return () => clearInterval(interval);
   }, [searching]);
 
+  const cleanupSearch = useCallback(async () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (user) {
+      await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
+    }
+  }, [user]);
+
   const startSearch = useCallback(async () => {
     if (!user || !profile) return;
     setSearching(true);
 
     if (gameMode === '1v1') {
-      await startSearch1v1();
+      await startSearch1v1(user, profile);
     } else {
-      await startSearch2v2();
+      await startSearch2v2(user, profile);
     }
-  }, [user, profile, navigate, gameMode]);
+  }, [user, profile, gameMode]);
 
-  const startSearch1v1 = async () => {
-    if (!user || !profile) return;
-
+  const startSearch1v1 = async (currentUser: NonNullable<typeof user>, currentProfile: NonNullable<typeof profile>) => {
     // Clean up stale matches
     const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: staleMatches } = await supabase
       .from('matches')
       .select('id')
       .eq('status', 'playing')
-      .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+      .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id}`)
       .lt('created_at', fifteenMinAgo);
 
     if (staleMatches && staleMatches.length > 0) {
@@ -50,10 +68,10 @@ export default function MatchmakingPage() {
       }
     }
 
-    await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
+    await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
     await supabase.from('matchmaking_queue').insert({
-      user_id: user.id,
-      trophies: profile.trophies,
+      user_id: currentUser.id,
+      trophies: currentProfile.trophies,
       game_mode: '1v1',
     });
 
@@ -62,10 +80,10 @@ export default function MatchmakingPage() {
       const { data: opponents } = await supabase
         .from('matchmaking_queue')
         .select('*')
-        .neq('user_id', user.id)
+        .neq('user_id', currentUser.id)
         .eq('game_mode', '1v1')
-        .gte('trophies', Math.max(0, profile.trophies - range))
-        .lte('trophies', profile.trophies + range)
+        .gte('trophies', Math.max(0, currentProfile.trophies - range))
+        .lte('trophies', currentProfile.trophies + range)
         .order('created_at', { ascending: true })
         .limit(1);
 
@@ -74,9 +92,9 @@ export default function MatchmakingPage() {
         const { data: match, error } = await supabase
           .from('matches')
           .insert({
-            player1_id: user.id,
+            player1_id: currentUser.id,
             player2_id: opponent.user_id,
-            current_turn: user.id,
+            current_turn: currentUser.id,
             status: 'playing',
             turn_started_at: new Date().toISOString(),
             game_mode: '1v1',
@@ -85,9 +103,9 @@ export default function MatchmakingPage() {
           .single();
 
         if (match && !error) {
-          await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
+          await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
           await supabase.from('matchmaking_queue').delete().eq('user_id', opponent.user_id);
-          navigate(`/game/${match.id}`);
+          if (mountedRef.current) navigate(`/game/${match.id}`);
           return true;
         }
       }
@@ -95,49 +113,52 @@ export default function MatchmakingPage() {
     };
 
     const searchStartedAt = new Date().toISOString();
-    const interval = setInterval(async () => {
+    intervalRef.current = setInterval(async () => {
+      if (!mountedRef.current) return;
+
       const { data: existingMatch } = await supabase
         .from('matches')
         .select('*')
         .eq('status', 'playing')
-        .or(`player1_id.eq.${user.id},player2_id.eq.${user.id}`)
+        .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id}`)
         .gte('created_at', searchStartedAt)
         .order('created_at', { ascending: false })
         .limit(1);
 
       if (existingMatch && existingMatch.length > 0) {
-        await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
-        clearInterval(interval);
-        navigate(`/game/${existingMatch[0].id}`);
+        await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        if (mountedRef.current) navigate(`/game/${existingMatch[0].id}`);
         return;
       }
       const found = await findMatch();
-      if (found) clearInterval(interval);
+      if (found && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }, 2000);
   };
 
-  const startSearch2v2 = async () => {
-    if (!user || !profile) return;
-
-    await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
+  const startSearch2v2 = async (currentUser: NonNullable<typeof user>, currentProfile: NonNullable<typeof profile>) => {
+    await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
     await supabase.from('matchmaking_queue').insert({
-      user_id: user.id,
-      trophies: profile.trophies,
+      user_id: currentUser.id,
+      trophies: currentProfile.trophies,
       game_mode: '2v2',
     });
 
     const searchStartedAt = new Date().toISOString();
 
     const tryForm2v2 = async () => {
-      // Find 3 other players in 2v2 queue within trophy range
       const range = 150;
       const { data: queuePlayers } = await supabase
         .from('matchmaking_queue')
         .select('*')
-        .neq('user_id', user.id)
+        .neq('user_id', currentUser.id)
         .eq('game_mode', '2v2')
-        .gte('trophies', Math.max(0, profile.trophies - range))
-        .lte('trophies', profile.trophies + range)
+        .gte('trophies', Math.max(0, currentProfile.trophies - range))
+        .lte('trophies', currentProfile.trophies + range)
         .order('created_at', { ascending: true })
         .limit(3);
 
@@ -146,25 +167,20 @@ export default function MatchmakingPage() {
         const p3 = queuePlayers[1];
         const p4 = queuePlayers[2];
 
-        // Blue team: user + p3, Red team: p2 + p4
-        // Turn order: Blue1, Red1, Blue2, Red2
-        const turnOrder = [user.id, p2.user_id, p3.user_id, p4.user_id];
-
-        // Random first team
         const blueFirst = Math.random() > 0.5;
         const finalTurnOrder = blueFirst
-          ? [user.id, p2.user_id, p3.user_id, p4.user_id]
-          : [p2.user_id, user.id, p4.user_id, p3.user_id];
+          ? [currentUser.id, p2.user_id, p3.user_id, p4.user_id]
+          : [p2.user_id, currentUser.id, p4.user_id, p3.user_id];
 
         const firstPlayer = finalTurnOrder[0];
 
         const { data: match, error } = await supabase
           .from('matches')
           .insert({
-            player1_id: user.id,       // blue1
-            player2_id: p2.user_id,    // red1
-            player3_id: p3.user_id,    // blue2
-            player4_id: p4.user_id,    // red2
+            player1_id: currentUser.id,
+            player2_id: p2.user_id,
+            player3_id: p3.user_id,
+            player4_id: p4.user_id,
             current_turn: firstPlayer,
             status: 'playing',
             turn_started_at: new Date().toISOString(),
@@ -176,47 +192,49 @@ export default function MatchmakingPage() {
           .single();
 
         if (match && !error) {
-          // Remove all from queue
-          const allIds = [user.id, p2.user_id, p3.user_id, p4.user_id];
+          const allIds = [currentUser.id, p2.user_id, p3.user_id, p4.user_id];
           for (const pid of allIds) {
             await supabase.from('matchmaking_queue').delete().eq('user_id', pid);
           }
-          navigate(`/game2v2/${match.id}`);
+          if (mountedRef.current) navigate(`/game2v2/${match.id}`);
           return true;
         }
       }
       return false;
     };
 
-    const interval = setInterval(async () => {
-      // Check if someone else already created a 2v2 match with us
+    intervalRef.current = setInterval(async () => {
+      if (!mountedRef.current) return;
+
       const { data: existingMatch } = await supabase
         .from('matches')
         .select('*')
         .eq('status', 'playing')
         .eq('game_mode', '2v2')
-        .or(`player1_id.eq.${user.id},player2_id.eq.${user.id},player3_id.eq.${user.id},player4_id.eq.${user.id}`)
+        .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id},player3_id.eq.${currentUser.id},player4_id.eq.${currentUser.id}`)
         .gte('created_at', searchStartedAt)
         .order('created_at', { ascending: false })
         .limit(1);
 
       if (existingMatch && existingMatch.length > 0) {
-        await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
-        clearInterval(interval);
-        navigate(`/game2v2/${existingMatch[0].id}`);
+        await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        if (mountedRef.current) navigate(`/game2v2/${existingMatch[0].id}`);
         return;
       }
 
       const found = await tryForm2v2();
-      if (found) clearInterval(interval);
+      if (found && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }, 2500);
   };
 
   const cancelSearch = async () => {
-    if (user) {
-      await supabase.from('matchmaking_queue').delete().eq('user_id', user.id);
-    }
-    setSearching(false);
+    await cleanupSearch();
+    if (mountedRef.current) setSearching(false);
   };
 
   return (
@@ -240,9 +258,7 @@ export default function MatchmakingPage() {
               </p>
             </div>
 
-            {/* Mode selector + Play button */}
             <div className="flex items-center justify-center gap-3 mb-6">
-              {/* Mode toggle */}
               <div className="flex rounded-lg border border-border overflow-hidden">
                 <button
                   onClick={() => setGameMode('1v1')}
@@ -268,7 +284,6 @@ export default function MatchmakingPage() {
                 </button>
               </div>
 
-              {/* Play button */}
               <button
                 onClick={startSearch}
                 className="px-10 py-3 rounded-xl gradient-gold text-primary-foreground font-display font-bold text-xl hover:opacity-90 transition-all glow-primary animate-pulse-glow"
@@ -278,7 +293,6 @@ export default function MatchmakingPage() {
               </button>
             </div>
 
-            {/* Mode description */}
             <div className="card-game rounded-lg p-3 text-sm text-muted-foreground">
               {gameMode === '1v1' ? (
                 <p>🎯 <span className="text-foreground font-semibold">Clássico 1v1</span> — Jogo da Velha 3x3, mano a mano</p>
