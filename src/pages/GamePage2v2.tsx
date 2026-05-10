@@ -152,7 +152,7 @@ export default function GamePage2v2() {
     await supabase.from('matches').update({
       status: 'finished',
       winner_id: winnerId,
-    }).eq('id', currentMatch.id);
+    }).eq('id', currentMatch.id).eq('status', 'playing').eq('current_turn', user.id);
   }, [user, getTeam]);
 
   // Timer
@@ -197,7 +197,7 @@ export default function GamePage2v2() {
         board: newBoard,
         status: 'finished',
         winner_id: winnerId,
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
       await refreshProfile();
     } else if (draw) {
       await supabase.from('matches').update({
@@ -205,7 +205,7 @@ export default function GamePage2v2() {
         round: match.round + 1,
         current_turn: turnOrder.length > 0 ? turnOrder[0] : match.player1_id,
         turn_started_at: new Date().toISOString(),
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
     } else {
       const currentIdx = turnOrder.indexOf(user!.id);
       const nextIdx = (currentIdx + 1) % turnOrder.length;
@@ -213,7 +213,7 @@ export default function GamePage2v2() {
         board: newBoard,
         current_turn: turnOrder[nextIdx],
         turn_started_at: new Date().toISOString(),
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
     }
   };
 
