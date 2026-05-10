@@ -20,8 +20,9 @@ export default function MatchmakingPage() {
     return () => {
       mountedRef.current = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (user) supabase.from('matchmaking_queue').delete().eq('user_id', user.id).then(() => undefined);
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!searching) return;
@@ -53,85 +54,30 @@ export default function MatchmakingPage() {
   }, [user, profile, gameMode]);
 
   const startSearch1v1 = async (currentUser: NonNullable<typeof user>, currentProfile: NonNullable<typeof profile>) => {
-    // Clean up stale matches
-    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data: staleMatches } = await supabase
-      .from('matches')
-      .select('id')
-      .eq('status', 'playing')
-      .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id}`)
-      .lt('created_at', fifteenMinAgo);
-
-    if (staleMatches && staleMatches.length > 0) {
-      for (const m of staleMatches) {
-        await supabase.from('matches').update({ status: 'finished' }).eq('id', m.id);
-      }
-    }
-
     await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
-    await supabase.from('matchmaking_queue').insert({
-      user_id: currentUser.id,
-      trophies: currentProfile.trophies,
-      game_mode: '1v1',
-    });
 
     const findMatch = async () => {
-      const range = 100;
-      const { data: opponents } = await supabase
-        .from('matchmaking_queue')
-        .select('*')
-        .neq('user_id', currentUser.id)
-        .eq('game_mode', '1v1')
-        .gte('trophies', Math.max(0, currentProfile.trophies - range))
-        .lte('trophies', currentProfile.trophies + range)
-        .order('created_at', { ascending: true })
-        .limit(1);
+      const { data: matchId, error } = await (supabase as any).rpc('find_or_create_match_1v1', {
+        _user_id: currentUser.id,
+        _trophies: currentProfile.trophies,
+      });
 
-      if (opponents && opponents.length > 0) {
-        const opponent = opponents[0];
-        const { data: match, error } = await supabase
-          .from('matches')
-          .insert({
-            player1_id: currentUser.id,
-            player2_id: opponent.user_id,
-            current_turn: currentUser.id,
-            status: 'playing',
-            turn_started_at: new Date().toISOString(),
-            game_mode: '1v1',
-          })
-          .select()
-          .single();
-
-        if (match && !error) {
-          await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
-          await supabase.from('matchmaking_queue').delete().eq('user_id', opponent.user_id);
-          if (mountedRef.current) navigate(`/game/${match.id}`);
-          return true;
-        }
+      if (error) {
+        console.error('Erro no matchmaking 1v1:', error);
+        return false;
       }
+
+      if (matchId) {
+        if (mountedRef.current) navigate(`/game/${matchId}`);
+        return true;
+      }
+
       return false;
     };
 
-    const searchStartedAt = new Date().toISOString();
+    await findMatch();
     intervalRef.current = setInterval(async () => {
       if (!mountedRef.current) return;
-
-      const { data: existingMatch } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('status', 'playing')
-        .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id}`)
-        .gte('created_at', searchStartedAt)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (existingMatch && existingMatch.length > 0) {
-        await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-        if (mountedRef.current) navigate(`/game/${existingMatch[0].id}`);
-        return;
-      }
       const found = await findMatch();
       if (found && intervalRef.current) {
         clearInterval(intervalRef.current);
