@@ -7,6 +7,7 @@ import EmojiReactions from '@/components/EmojiReactions';
 
 const BOARD_SIZE = 5;
 const WIN_LENGTH = 5;
+const TURN_DURATION_SECONDS = 15;
 
 function checkWinner5x5(board: string[]): string | null {
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
@@ -94,13 +95,12 @@ export default function GamePage2v2() {
       if (data) {
         setMatch(data);
         setBoard(data.board as string[]);
-        if (data.status === 'finished') {
-          setGameOver(true);
-          setWinner(data.winner_id);
-        }
+        setGameOver(data.status === 'finished');
+        setWinner(data.status === 'finished' ? data.winner_id : null);
       }
     };
     fetchMatch();
+    const pollInterval = setInterval(fetchMatch, 3000);
 
     const channel = supabase
       .channel(`match-2v2-${id}`)
@@ -108,16 +108,16 @@ export default function GamePage2v2() {
         const newMatch = payload.new as any;
         setMatch(newMatch);
         setBoard(newMatch.board as string[]);
-        setTimeLeft(15);
         timeUpHandled.current = false;
-        if (newMatch.status === 'finished') {
-          setGameOver(true);
-          setWinner(newMatch.winner_id);
-        }
+        setGameOver(newMatch.status === 'finished');
+        setWinner(newMatch.status === 'finished' ? newMatch.winner_id : null);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   // Fetch all player profiles
@@ -152,30 +152,33 @@ export default function GamePage2v2() {
     await supabase.from('matches').update({
       status: 'finished',
       winner_id: winnerId,
-    }).eq('id', currentMatch.id);
+    }).eq('id', currentMatch.id).eq('status', 'playing').eq('current_turn', user.id);
   }, [user, getTeam]);
 
   // Timer
   useEffect(() => {
     if (gameOver || !match || match.status !== 'playing') return;
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          if (matchRef.current?.current_turn === user?.id) {
-            handleTimeUp();
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const currentMatch = matchRef.current;
+      if (!currentMatch?.turn_started_at) return;
+
+      const elapsed = Math.floor((Date.now() - new Date(currentMatch.turn_started_at).getTime()) / 1000);
+      const nextTime = Math.max(0, TURN_DURATION_SECONDS - elapsed);
+      setTimeLeft(nextTime);
+
+      if (nextTime === 0 && currentMatch.current_turn === user?.id && !timeUpHandled.current) {
+        handleTimeUp();
+      }
+    }, 250);
     return () => clearInterval(interval);
   }, [match?.id, match?.status, gameOver, user?.id, handleTimeUp]);
 
   useEffect(() => {
-    setTimeLeft(15);
+    const startedAt = match?.turn_started_at ? new Date(match.turn_started_at).getTime() : Date.now();
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    setTimeLeft(Math.max(0, TURN_DURATION_SECONDS - elapsed));
     timeUpHandled.current = false;
-  }, [match?.current_turn]);
+  }, [match?.current_turn, match?.turn_started_at]);
 
   const makeMove = async (index: number) => {
     if (!isMyTurn || board[index] || gameOver || !match) return;
@@ -194,7 +197,7 @@ export default function GamePage2v2() {
         board: newBoard,
         status: 'finished',
         winner_id: winnerId,
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
       await refreshProfile();
     } else if (draw) {
       await supabase.from('matches').update({
@@ -202,7 +205,7 @@ export default function GamePage2v2() {
         round: match.round + 1,
         current_turn: turnOrder.length > 0 ? turnOrder[0] : match.player1_id,
         turn_started_at: new Date().toISOString(),
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
     } else {
       const currentIdx = turnOrder.indexOf(user!.id);
       const nextIdx = (currentIdx + 1) % turnOrder.length;
@@ -210,7 +213,7 @@ export default function GamePage2v2() {
         board: newBoard,
         current_turn: turnOrder[nextIdx],
         turn_started_at: new Date().toISOString(),
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
     }
   };
 

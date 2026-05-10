@@ -166,6 +166,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_stale_matchmaking_queue: { Args: never; Returns: undefined }
+      find_or_create_match_1v1: {
+        Args: { _trophies: number; _user_id: string }
+        Returns: string
+      }
+      find_or_create_match_2v2: {
+        Args: { _trophies: number; _user_id: string }
+        Returns: string
+      }
       update_trophies: {
         Args: { loser: string; winner: string }
         Returns: undefined
