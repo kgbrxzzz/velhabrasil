@@ -7,6 +7,7 @@ import EmojiReactions from '@/components/EmojiReactions';
 
 const BOARD_SIZE = 5;
 const WIN_LENGTH = 5;
+const TURN_DURATION_SECONDS = 15;
 
 function checkWinner5x5(board: string[]): string | null {
   const dirs = [[1,0],[0,1],[1,1],[1,-1]];
@@ -94,13 +95,12 @@ export default function GamePage2v2() {
       if (data) {
         setMatch(data);
         setBoard(data.board as string[]);
-        if (data.status === 'finished') {
-          setGameOver(true);
-          setWinner(data.winner_id);
-        }
+        setGameOver(data.status === 'finished');
+        setWinner(data.status === 'finished' ? data.winner_id : null);
       }
     };
     fetchMatch();
+    const pollInterval = setInterval(fetchMatch, 3000);
 
     const channel = supabase
       .channel(`match-2v2-${id}`)
@@ -108,16 +108,16 @@ export default function GamePage2v2() {
         const newMatch = payload.new as any;
         setMatch(newMatch);
         setBoard(newMatch.board as string[]);
-        setTimeLeft(15);
         timeUpHandled.current = false;
-        if (newMatch.status === 'finished') {
-          setGameOver(true);
-          setWinner(newMatch.winner_id);
-        }
+        setGameOver(newMatch.status === 'finished');
+        setWinner(newMatch.status === 'finished' ? newMatch.winner_id : null);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   // Fetch all player profiles
