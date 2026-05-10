@@ -145,7 +145,7 @@ export default function GamePage() {
     await supabase.from('matches').update({
       status: 'finished',
       winner_id: winnerId,
-    }).eq('id', currentMatch.id);
+    }).eq('id', currentMatch.id).eq('status', 'playing').eq('current_turn', user.id);
 
     if (!isFriendly) {
       await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
@@ -198,7 +198,7 @@ export default function GamePage() {
         board: newBoard,
         status: 'finished',
         winner_id: winnerId,
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
 
       if (!isFriendly) {
         await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
@@ -210,14 +210,14 @@ export default function GamePage() {
         round: match.round + 1,
         current_turn: amPlayer1 ? match.player2_id : match.player1_id,
         turn_started_at: new Date().toISOString(),
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
     } else {
       const nextTurn = amPlayer1 ? match.player2_id : match.player1_id;
       await supabase.from('matches').update({
         board: newBoard,
         current_turn: nextTurn,
         turn_started_at: new Date().toISOString(),
-      }).eq('id', match.id);
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
     }
   };
 
