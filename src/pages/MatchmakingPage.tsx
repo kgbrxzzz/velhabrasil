@@ -88,88 +88,29 @@ export default function MatchmakingPage() {
 
   const startSearch2v2 = async (currentUser: NonNullable<typeof user>, currentProfile: NonNullable<typeof profile>) => {
     await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
-    await supabase.from('matchmaking_queue').insert({
-      user_id: currentUser.id,
-      trophies: currentProfile.trophies,
-      game_mode: '2v2',
-    });
-
-    const searchStartedAt = new Date().toISOString();
 
     const tryForm2v2 = async () => {
-      const range = 150;
-      const { data: queuePlayers } = await supabase
-        .from('matchmaking_queue')
-        .select('*')
-        .neq('user_id', currentUser.id)
-        .eq('game_mode', '2v2')
-        .gte('trophies', Math.max(0, currentProfile.trophies - range))
-        .lte('trophies', currentProfile.trophies + range)
-        .order('created_at', { ascending: true })
-        .limit(3);
+      const { data: matchId, error } = await (supabase as any).rpc('find_or_create_match_2v2', {
+        _user_id: currentUser.id,
+        _trophies: currentProfile.trophies,
+      });
 
-      if (queuePlayers && queuePlayers.length >= 3) {
-        const p2 = queuePlayers[0];
-        const p3 = queuePlayers[1];
-        const p4 = queuePlayers[2];
-
-        const blueFirst = Math.random() > 0.5;
-        const finalTurnOrder = blueFirst
-          ? [currentUser.id, p2.user_id, p3.user_id, p4.user_id]
-          : [p2.user_id, currentUser.id, p4.user_id, p3.user_id];
-
-        const firstPlayer = finalTurnOrder[0];
-
-        const { data: match, error } = await supabase
-          .from('matches')
-          .insert({
-            player1_id: currentUser.id,
-            player2_id: p2.user_id,
-            player3_id: p3.user_id,
-            player4_id: p4.user_id,
-            current_turn: firstPlayer,
-            status: 'playing',
-            turn_started_at: new Date().toISOString(),
-            game_mode: '2v2',
-            board: Array(25).fill(''),
-            turn_order: finalTurnOrder,
-          })
-          .select()
-          .single();
-
-        if (match && !error) {
-          const allIds = [currentUser.id, p2.user_id, p3.user_id, p4.user_id];
-          for (const pid of allIds) {
-            await supabase.from('matchmaking_queue').delete().eq('user_id', pid);
-          }
-          if (mountedRef.current) navigate(`/game2v2/${match.id}`);
-          return true;
-        }
+      if (error) {
+        console.error('Erro no matchmaking 2v2:', error);
+        return false;
       }
+
+      if (matchId) {
+        if (mountedRef.current) navigate(`/game2v2/${matchId}`);
+        return true;
+      }
+
       return false;
     };
 
+    await tryForm2v2();
     intervalRef.current = setInterval(async () => {
       if (!mountedRef.current) return;
-
-      const { data: existingMatch } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('status', 'playing')
-        .eq('game_mode', '2v2')
-        .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id},player3_id.eq.${currentUser.id},player4_id.eq.${currentUser.id}`)
-        .gte('created_at', searchStartedAt)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (existingMatch && existingMatch.length > 0) {
-        await supabase.from('matchmaking_queue').delete().eq('user_id', currentUser.id);
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-        if (mountedRef.current) navigate(`/game2v2/${existingMatch[0].id}`);
-        return;
-      }
-
       const found = await tryForm2v2();
       if (found && intervalRef.current) {
         clearInterval(intervalRef.current);
