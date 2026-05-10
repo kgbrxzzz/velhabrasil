@@ -18,6 +18,8 @@ const PIECE_OPTIONS: Record<string, { x: string; o: string }> = {
   fire: { x: '🔥', o: '❄️' },
 };
 
+const TURN_DURATION_SECONDS = 10;
+
 function checkWinner(board: string[]): string | null {
   for (const combo of WINNING_COMBOS) {
     const [a, b, c] = combo;
@@ -66,27 +68,28 @@ export default function GamePage() {
   useEffect(() => {
     if (!id) return;
 
+    const applyMatch = async (data: any) => {
+      if (isMatchStale(data)) {
+        await supabase.from('matches').update({ status: 'finished' }).eq('id', data.id).eq('status', 'playing');
+        setMatch({ ...data, status: 'finished' });
+        setBoard(data.board as string[]);
+        setGameOver(true);
+        setWinner(null);
+        return;
+      }
+      setMatch(data);
+      setBoard(data.board as string[]);
+      setGameOver(data.status === 'finished');
+      setWinner(data.status === 'finished' ? data.winner_id : null);
+    };
+
     const fetchMatch = async () => {
       const { data } = await supabase.from('matches').select('*').eq('id', id).single();
-      if (data) {
-        if (isMatchStale(data)) {
-          await supabase.from('matches').update({ status: 'finished' }).eq('id', data.id);
-          setMatch({ ...data, status: 'finished' });
-          setBoard(data.board as string[]);
-          setGameOver(true);
-          setWinner(null);
-          return;
-        }
-        setMatch(data);
-        setBoard(data.board as string[]);
-        if (data.status === 'finished') {
-          setGameOver(true);
-          setWinner(data.winner_id);
-        }
-      }
+      if (data) await applyMatch(data);
     };
 
     fetchMatch();
+    const pollInterval = setInterval(fetchMatch, 3000);
 
     const channel = supabase
       .channel(`match-${id}`)
@@ -94,16 +97,16 @@ export default function GamePage() {
         const newMatch = payload.new as any;
         setMatch(newMatch);
         setBoard(newMatch.board as string[]);
-        setTimeLeft(10);
         timeUpHandled.current = false;
-        if (newMatch.status === 'finished') {
-          setGameOver(true);
-          setWinner(newMatch.winner_id);
-        }
+        setGameOver(newMatch.status === 'finished');
+        setWinner(newMatch.status === 'finished' ? newMatch.winner_id : null);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
   }, [id, isMatchStale]);
 
   // Fetch opponent profile
