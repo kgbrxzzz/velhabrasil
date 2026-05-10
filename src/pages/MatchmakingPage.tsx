@@ -75,7 +75,8 @@ export default function MatchmakingPage() {
       return false;
     };
 
-    await findMatch();
+    const initialFound = await findMatch();
+    if (initialFound) return;
     intervalRef.current = setInterval(async () => {
       if (!mountedRef.current) return;
       const found = await findMatch();
@@ -108,7 +109,8 @@ export default function MatchmakingPage() {
       return false;
     };
 
-    await tryForm2v2();
+    const initialFound = await tryForm2v2();
+    if (initialFound) return;
     intervalRef.current = setInterval(async () => {
       if (!mountedRef.current) return;
       const found = await tryForm2v2();
