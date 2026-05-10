@@ -157,25 +157,28 @@ export default function GamePage() {
     if (gameOver || !match || match.status !== 'playing') return;
 
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          if (matchRef.current?.current_turn === user?.id) {
-            handleTimeUp();
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const currentMatch = matchRef.current;
+      if (!currentMatch?.turn_started_at) return;
+
+      const elapsed = Math.floor((Date.now() - new Date(currentMatch.turn_started_at).getTime()) / 1000);
+      const nextTime = Math.max(0, TURN_DURATION_SECONDS - elapsed);
+      setTimeLeft(nextTime);
+
+      if (nextTime === 0 && currentMatch.current_turn === user?.id && !timeUpHandled.current) {
+        handleTimeUp();
+      }
+    }, 250);
 
     return () => clearInterval(interval);
   }, [match?.id, match?.status, gameOver, user?.id, handleTimeUp]);
 
   // Reset timer on turn change
   useEffect(() => {
-    setTimeLeft(10);
+    const startedAt = match?.turn_started_at ? new Date(match.turn_started_at).getTime() : Date.now();
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    setTimeLeft(Math.max(0, TURN_DURATION_SECONDS - elapsed));
     timeUpHandled.current = false;
-  }, [match?.current_turn]);
+  }, [match?.current_turn, match?.turn_started_at]);
 
   const makeMove = async (index: number) => {
     if (!isMyTurn || board[index] || gameOver || !match) return;
