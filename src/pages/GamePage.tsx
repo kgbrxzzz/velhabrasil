@@ -142,12 +142,13 @@ export default function GamePage() {
     const isP1 = currentMatch.player1_id === user.id;
     const winnerId = isP1 ? currentMatch.player2_id : currentMatch.player1_id;
 
-    await supabase.from('matches').update({
+    const { data: updated } = await supabase.from('matches').update({
       status: 'finished',
       winner_id: winnerId,
-    }).eq('id', currentMatch.id).eq('status', 'playing').eq('current_turn', user.id);
+    }).eq('id', currentMatch.id).eq('status', 'playing').eq('current_turn', user.id).select('id');
 
-    if (!isFriendly) {
+    // Só atualiza troféus se realmente finalizou esta partida (evita dupla contagem)
+    if (!isFriendly && updated && updated.length > 0) {
       await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
     }
   }, [user, isFriendly]);
@@ -194,13 +195,14 @@ export default function GamePage() {
       const winnerId = user!.id;
       const loserId = amPlayer1 ? match.player2_id : match.player1_id;
 
-      await supabase.from('matches').update({
+      const { data: updated } = await supabase.from('matches').update({
         board: newBoard,
         status: 'finished',
         winner_id: winnerId,
-      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id);
+        turn_started_at: new Date().toISOString(),
+      }).eq('id', match.id).eq('status', 'playing').eq('current_turn', user!.id).select('id');
 
-      if (!isFriendly) {
+      if (!isFriendly && updated && updated.length > 0) {
         await supabase.rpc('update_trophies', { winner: winnerId, loser: loserId });
       }
       await refreshProfile();

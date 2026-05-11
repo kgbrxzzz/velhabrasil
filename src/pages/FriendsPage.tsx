@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOnlineUsers } from '@/hooks/useOnlinePresence';
 import { Users, UserPlus, Check, X, Swords, Search, Clock, Circle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,30 +31,8 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const onlineUsers = useOnlineUsers();
   const [loading, setLoading] = useState(true);
-
-  // Track online presence
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase.channel('online-friends', {
-      config: { presence: { key: user.id } },
-    });
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        setOnlineUsers(new Set(Object.keys(state)));
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id });
-        }
-      });
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
 
   // Fetch friendships
   const fetchFriends = useCallback(async () => {
@@ -170,24 +149,25 @@ export default function FriendsPage() {
     if (!user) return;
 
     if (mode === '1v1') {
-      const { data: match, error } = await supabase.from('matches').insert({
-        player1_id: user.id,
-        player2_id: friendId,
-        status: 'playing',
-        current_turn: user.id,
-        turn_started_at: new Date().toISOString(),
-        board: Array(9).fill(''),
-        game_mode: '1v1',
-      }).select().single();
+      const { data: matchId, error } = await (supabase as any).rpc('invite_friend_1v1', {
+        _user_id: user.id,
+        _friend_id: friendId,
+      });
 
-      if (error || !match) { toast.error('Erro ao criar partida'); return; }
+      if (error || !matchId) {
+        const msg = error?.message || '';
+        if (msg.includes('already_in_match')) toast.error('Você já está em uma partida!');
+        else if (msg.includes('friend_busy')) toast.error('Esse amigo já está em partida.');
+        else toast.error('Erro ao criar partida');
+        return;
+      }
 
       await supabase.channel(`friend-invite-${friendId}`).send({
         type: 'broadcast', event: 'match-invite',
-        payload: { matchId: match.id, fromId: user.id, mode: '1v1' },
+        payload: { matchId, fromId: user.id, mode: '1v1' },
       });
       toast.success('Convite enviado!');
-      navigate(`/game/${match.id}?friendly=true`);
+      navigate(`/game/${matchId}?friendly=true`);
     } else {
       // 2v2 invite - create a waiting match, need 2 more players
       const { data: match, error } = await supabase.from('matches').insert({

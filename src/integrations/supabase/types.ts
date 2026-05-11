@@ -175,6 +175,10 @@ export type Database = {
         Args: { _trophies: number; _user_id: string }
         Returns: string
       }
+      invite_friend_1v1: {
+        Args: { _friend_id: string; _user_id: string }
+        Returns: string
+      }
       update_trophies: {
         Args: { loser: string; winner: string }
         Returns: undefined
