@@ -170,24 +170,25 @@ export default function FriendsPage() {
     if (!user) return;
 
     if (mode === '1v1') {
-      const { data: match, error } = await supabase.from('matches').insert({
-        player1_id: user.id,
-        player2_id: friendId,
-        status: 'playing',
-        current_turn: user.id,
-        turn_started_at: new Date().toISOString(),
-        board: Array(9).fill(''),
-        game_mode: '1v1',
-      }).select().single();
+      const { data: matchId, error } = await (supabase as any).rpc('invite_friend_1v1', {
+        _user_id: user.id,
+        _friend_id: friendId,
+      });
 
-      if (error || !match) { toast.error('Erro ao criar partida'); return; }
+      if (error || !matchId) {
+        const msg = error?.message || '';
+        if (msg.includes('already_in_match')) toast.error('Você já está em uma partida!');
+        else if (msg.includes('friend_busy')) toast.error('Esse amigo já está em partida.');
+        else toast.error('Erro ao criar partida');
+        return;
+      }
 
       await supabase.channel(`friend-invite-${friendId}`).send({
         type: 'broadcast', event: 'match-invite',
-        payload: { matchId: match.id, fromId: user.id, mode: '1v1' },
+        payload: { matchId, fromId: user.id, mode: '1v1' },
       });
       toast.success('Convite enviado!');
-      navigate(`/game/${match.id}?friendly=true`);
+      navigate(`/game/${matchId}?friendly=true`);
     } else {
       // 2v2 invite - create a waiting match, need 2 more players
       const { data: match, error } = await supabase.from('matches').insert({
