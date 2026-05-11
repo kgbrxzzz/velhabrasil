@@ -14,6 +14,7 @@ import ProfilePage from "./pages/ProfilePage";
 import FriendsPage from "./pages/FriendsPage";
 import AppLayout from "./components/AppLayout";
 import FriendInviteListener from "./components/FriendInviteListener";
+import { OnlinePresenceProvider } from "@/hooks/useOnlinePresence";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import NotFound from "./pages/NotFound";
 
@@ -83,8 +84,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <FriendInviteListener />
-          <AppRoutes />
+          <OnlinePresenceProvider>
+            <FriendInviteListener />
+            <AppRoutes />
+          </OnlinePresenceProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
