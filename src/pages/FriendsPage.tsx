@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useOnlineUsers } from '@/hooks/useOnlinePresence';
 import { Users, UserPlus, Check, X, Swords, Search, Clock, Circle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,30 +31,8 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const onlineUsers = useOnlineUsers();
   const [loading, setLoading] = useState(true);
-
-  // Track online presence
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase.channel('online-friends', {
-      config: { presence: { key: user.id } },
-    });
-
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        setOnlineUsers(new Set(Object.keys(state)));
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id });
-        }
-      });
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
 
   // Fetch friendships
   const fetchFriends = useCallback(async () => {
