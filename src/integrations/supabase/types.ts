@@ -48,6 +48,7 @@ export type Database = {
           current_turn: string | null
           game_mode: string
           id: string
+          is_friendly: boolean
           player1_id: string
           player2_id: string | null
           player3_id: string | null
@@ -65,6 +66,7 @@ export type Database = {
           current_turn?: string | null
           game_mode?: string
           id?: string
+          is_friendly?: boolean
           player1_id: string
           player2_id?: string | null
           player3_id?: string | null
@@ -82,6 +84,7 @@ export type Database = {
           current_turn?: string | null
           game_mode?: string
           id?: string
+          is_friendly?: boolean
           player1_id?: string
           player2_id?: string | null
           player3_id?: string | null
